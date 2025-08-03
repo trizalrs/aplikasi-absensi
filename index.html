@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Absen & Nilai Siswa v3.4</title>
+    
+    <meta name="theme-color" content="#4f46e5"/>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="images/icon-192x192.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .bottom-nav { box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
+        .nav-btn { transition: all 0.2s ease-in-out; }
+        .nav-btn.active { color: #4f46e5; transform: translateY(-4px); }
+        .view { display: none; }
+        .view.active { display: block; }
+        .status-btn.selected { transform: scale(1.1); box-shadow: 0 4px 14px 0 rgba(0, 118, 255, 0.39); }
+        /* Custom Modal Styles */
+        .modal-overlay {
+            transition: opacity 0.2s ease-in-out;
+        }
+        .feedback-toast {
+            transition: opacity 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div id="app" class="max-w-lg mx-auto pb-24">
+        <header class="bg-indigo-600 text-white p-4 text-center sticky top-0 z-10 shadow-md">
+            <h1 id="header-title" class="text-xl font-bold">Dashboard</h1>
+        </header>
+
+        <main class="p-4">
+            <div id="view-dashboard" class="view active space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-lg shadow text-center">
+                        <h3 class="text-sm font-medium text-gray-500">Total Kelas</h3>
+                        <p id="db-total-kelas" class="text-3xl font-bold">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow text-center">
+                        <h3 class="text-sm font-medium text-gray-500">Total Siswa</h3>
+                        <p id="db-total-siswa" class="text-3xl font-bold">0</p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold mb-3">Grafik Kehadiran Bulanan</h3>
+                    <div id="chart-container">
+                        <canvas id="attendanceChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold mb-3">Ringkasan Absensi Hari Ini</h3>
+                    <div id="db-absensi-hari-ini" class="text-center text-gray-500">
+                        <p>Belum ada absensi hari ini.</p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                     <h3 class="text-lg font-semibold mb-2">Tentang Aplikasi</h3>
+                     <p class="text-sm text-gray-600">Aplikasi ini di buat oleh: <span class="font-semibold">TAUFIK RIZAL, A.Md.Kom</span></p>
+                     <p class="text-sm text-gray-600">Di Dedikasikan Untuk: <span class="font-semibold">SMK RIYADUL ULUM</span></p>
+                     <p class="text-xs text-gray-400 mt-2">Aplikasi Absensi Siswa v3.4</p>
+                </div>
+            </div>
+
+            <div id="view-attendance" class="view space-y-4">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h2 class="text-lg font-semibold mb-3">Mulai Sesi Absensi</h2>
+                    <div class="space-y-3">
+                        <select id="select-kelas-absen" class="w-full p-2 border border-gray-300 rounded-md">
+                            <option value="">Pilih Kelas</option>
+                        </select>
+                        <select id="select-mapel-absen" class="w-full p-2 border border-gray-300 rounded-md">
+                            <option value="">Pilih Mata Pelajaran</option>
+                        </select>
+                        <button onclick="app.startAttendance()" class="w-full bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 font-bold">Mulai Absen</button>
+                    </div>
+                </div>
+                <div id="attendance-sheet" class="hidden bg-white p-4 rounded-lg shadow">
+                    <h3 id="attendance-header" class="text-md font-semibold mb-3"></h3>
+                    <div id="list-absen" class="space-y-3"></div>
+                    <button onclick="app.saveAttendance()" class="mt-4 w-full bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 font-bold">Simpan Absensi</button>
+                </div>
+                 <div id="message-box" class="hidden p-4 rounded-md text-center font-medium"></div>
+            </div>
+            
+            <div id="view-grades" class="view space-y-4">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h2 class="text-lg font-semibold mb-3">Input Nilai Siswa</h2>
+                    <div class="space-y-3">
+                        <select id="select-kelas-nilai" class="w-full p-2 border border-gray-300 rounded-md">
+                            <option value="">Pilih Kelas</option>
+                        </select>
+                        <select id="select-mapel-nilai" class="w-full p-2 border border-gray-300 rounded-md">
+                            <option value="">Pilih Mata Pelajaran</option>
+                        </select>
+                        <select id="select-jenis-nilai" class="w-full p-2 border border-gray-300 rounded-md">
+                            <option value="">Pilih Jenis Penilaian</option>
+                            <option value="Ulangan Harian 1">Ulangan Harian 1</option>
+                            <option value="Ulangan Harian 2">Ulangan Harian 2</option>
+                            <option value="Ulangan Harian 3">Ulangan Harian 3</option>
+                            <option value="Ulangan Harian 4">Ulangan Harian 4</option>
+                            <option value="Ulangan Harian 5">Ulangan Harian 5</option>
+                            <option value="PTS">PTS (Penilaian Tengah Semester)</option>
+                            <option value="PAS">PAS (Penilaian Akhir Semester)</option>
+                        </select>
+                        <button onclick="app.showGradeSheet()" class="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 font-bold">Tampilkan Daftar Nilai</button>
+                    </div>
+                </div>
+                <div id="grade-sheet" class="hidden bg-white p-4 rounded-lg shadow">
+                    <h3 id="grade-header" class="text-md font-semibold mb-3"></h3>
+                    <div id="list-nilai" class="space-y-3"></div>
+                    <button onclick="app.saveGrades()" class="mt-4 w-full bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 font-bold">Simpan Nilai</button>
+                </div>
+            </div>
+
+            <div id="view-reports" class="view space-y-4">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h2 class="text-lg font-semibold mb-3">Buat Laporan</h2>
+                    <div class="space-y-3">
+                        <select id="select-jenis-laporan" class="w-full p-2 border border-gray-300 rounded-md" onchange="app.toggleReportOptions()">
+                            <option value="absensi">Laporan Absensi</option>
+                            <option value="nilai">Laporan Nilai</option>
+                        </select>
+                        
+                        <div id="laporan-absensi-options">
+                            <select id="select-kelas-laporan-absensi" class="w-full p-2 border border-gray-300 rounded-md mt-3">
+                                <option value="">Pilih Kelas</option>
+                            </select>
+                            <select id="select-periode-laporan" class="w-full p-2 border border-gray-300 rounded-md mt-3">
+                                <option value="bulanan">Laporan Bulanan (Bulan Ini)</option>
+                                <option value="semester1">Laporan Semester 1 (Jul-Des)</option>
+                                <option value="semester2">Laporan Semester 2 (Jan-Jun)</option>
+                                <option value="tahunan">Laporan Tahunan (Tahun Ini)</option>
+                            </select>
+                        </div>
+
+                        <div id="laporan-nilai-options" class="hidden">
+                             <select id="select-kelas-laporan-nilai" class="w-full p-2 border border-gray-300 rounded-md mt-3">
+                                <option value="">Pilih Kelas</option>
+                            </select>
+                             <select id="select-mapel-laporan-nilai" class="w-full p-2 border border-gray-300 rounded-md mt-3">
+                                <option value="">Pilih Mata Pelajaran</option>
+                            </select>
+                        </div>
+
+                        <button onclick="app.generateReport()" class="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 font-bold mt-3">Tampilkan Laporan</button>
+                    </div>
+                </div>
+                <div id="report-output" class="hidden bg-white p-4 rounded-lg shadow">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 id="report-header" class="text-md font-semibold"></h3>
+                        <button id="export-pdf" onclick="app.exportReportToPDF()" class="bg-red-600 text-white px-3 py-1 rounded-md text-sm hover:bg-red-700">Ekspor PDF</button>
+                    </div>
+                    <div id="report-table-container" class="overflow-x-auto"></div>
+                </div>
+            </div>
+            
+             <div id="view-setup" class="view space-y-6">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h2 class="text-lg font-semibold mb-3 border-b pb-2">Kelola Kelas</h2>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="input-kelas" placeholder="Contoh: X IPA 1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <button onclick="app.addClass()" class="bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 font-medium">Tambah</button>
+                    </div>
+                    <ul id="list-kelas" class="space-y-2"></ul>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h2 class="text-lg font-semibold mb-3 border-b pb-2">Kelola Mata Pelajaran</h2>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="input-mapel" placeholder="Contoh: Matematika" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <button onclick="app.addSubject()" class="bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 font-medium">Tambah</button>
+                    </div>
+                    <ul id="list-mapel" class="space-y-2"></ul>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <h2 class="text-lg font-semibold mb-3 border-b pb-2">Kelola Siswa</h2>
+                    <div class="bg-green-50 p-3 rounded-md mb-4 border border-green-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="block text-sm font-medium text-green-800">Impor Banyak Siswa</label>
+                            <button onclick="app.downloadCSVTemplate()" class="text-xs bg-white text-green-700 border border-green-300 px-2 py-1 rounded-md hover:bg-green-100">Download Template</button>
+                        </div>
+                        <input type="file" id="import-csv" accept=".csv" onchange="app.importStudentsFromCSV(event)" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-100 file:text-green-700 hover:file:bg-green-200"/>
+                        <p class="text-xs text-gray-500 mt-1">Pilih file .csv untuk menambah siswa secara massal.</p>
+                        <div id="import-feedback" class="mt-2 text-sm"></div>
+                    </div>
+                    
+                    <h3 class="text-md font-semibold mb-3">Tambah Siswa Manual</h3>
+                    <select id="select-kelas-siswa" class="w-full p-2 border border-gray-300 rounded-md mb-3" onchange="app.renderStudentList()">
+                        <option value="">Pilih Kelas Dulu</option>
+                    </select>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="input-siswa" placeholder="Nama Siswa" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <button onclick="app.addStudent()" class="bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 font-medium">Tambah</button>
+                    </div>
+                    <ul id="list-siswa" class="space-y-2"></ul>
+                </div>
+            </div>
+
+        </main>
+
+        <nav class="bottom-nav fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-gray-200 flex justify-around p-2">
+            <button id="nav-dashboard" onclick="app.changeView('dashboard')" class="nav-btn active flex flex-col items-center text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                <span class="text-xs font-medium">Dashboard</span>
+            </button>
+            <button id="nav-attendance" onclick="app.changeView('attendance')" class="nav-btn flex flex-col items-center text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                <span class="text-xs font-medium">Absensi</span>
+            </button>
+            <button id="nav-grades" onclick="app.changeView('grades')" class="nav-btn flex flex-col items-center text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5z" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 01-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6" /></svg>
+                <span class="text-xs font-medium">Nilai</span>
+            </button>
+            <button id="nav-reports" onclick="app.changeView('reports')" class="nav-btn flex flex-col items-center text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <span class="text-xs font-medium">Laporan</span>
+            </button>
+            <button id="nav-setup" onclick="app.changeView('setup')" class="nav-btn flex flex-col items-center text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                <span class="text-xs font-medium">Pengaturan</span>
+            </button>
+        </nav>
+    </div>
+
+    <div id="delete-modal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden opacity-0">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 id="modal-title" class="text-lg font-bold text-gray-900">Konfirmasi Penghapusan</h3>
+            <p id="modal-text" class="mt-2 text-sm text-gray-600">Apakah Anda yakin ingin menghapus data ini? Tindakan ini tidak dapat dibatalkan.</p>
+            <div class="mt-6 flex justify-end gap-3">
+                <button onclick="app.cancelDeletion()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Batal</button>
+                <button onclick="app.confirmDeletion()" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Ya, Hapus</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="global-feedback" class="feedback-toast fixed top-5 right-5 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 hidden opacity-0">
+        <p id="global-feedback-text"></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const { jsPDF } = window.jspdf;
+
+            const app = {
+                data: {
+                    classes: [],
+                    subjects: [],
+                    students: [],
+                    attendance: [],
+                    grades: [],
+                },
+                currentAttendance: [],
+                currentReportData: [],
+                itemToDelete: { type: null, id: null },
+                chartInstance: null,
+
+                init() {
+                    this.loadData();
+                    this.updateMonthlyReportOption();
+                    this.changeView('dashboard');
+                    this.renderAll();
+                },
+                
+                // --- FUNGSI INI DIMODIFIKASI UNTUK MEMUAT DATA DEFAULT ---
+                loadData() {
+                    const storedData = localStorage.getItem('attendanceAppData');
+                    
+                    // JIKA TIDAK ADA DATA DI PENYIMPANAN, BUAT DATA DEFAULT
+                    if (!storedData) {
+                        console.log("Membuat data awal (default)...");
+                        const defaultClasses = [
+                            { id: '1', name: 'X RPL' },
+                            { id: '2', name: 'XI RPL' },
+                            { id: '3', name: 'XII RPL' }
+                        ];
+
+                        const defaultStudents = [
+                            { id: '101', name: 'ARY JULIAN', classId: '1' },
+                            { id: '102', name: 'ALIS PIJRIANI', classId: '1' },
+                            { id: '103', name: 'BERLINDA SAPITRI', classId: '1' },
+                            { id: '104', name: 'DEDE SAEPUL ANWAR', classId: '1' },
+                            { id: '105', name: 'DENIS RISWANTO', classId: '1' },
+                            { id: '106', name: 'KAILA RIZQIA', classId: '1' },
+                            { id: '107', name: 'KARLINA', classId: '1' },
+                            { id: '108', name: 'MUHAMMAD NASIR RAMDHANI', classId: '1' },
+                            { id: '109', name: 'WILY ADITIA', classId: '1' },
+                            { id: '110', name: 'YOGA SAPUTRA', classId: '1' },
+                            { id: '111', name: 'YOGI SAPUTRA', classId: '1' },
+                            { id: '201', name: 'ASTRI', classId: '2' },
+                            { id: '202', name: 'DIMAS AGUSTIAN', classId: '2' },
+                            { id: '203', name: 'INTAN PUSPITASARI', classId: '2' },
+                            { id: '204', name: 'MUHAMAD FARIZ NUR HERMAWAN', classId: '2' },
+                            { id: '205', name: 'PONI', classId: '2' },
+                            { id: '206', name: 'RENI', classId: '2' },
+                            { id: '207', name: 'RESTU HERDIANSAH', classId: '2' },
+                            { id: '208', name: 'Ryan Cahya Nugraha', classId: '2' },
+                            { id: '301', name: 'AHMAD FAUZI', classId: '3' },
+                            { id: '302', name: 'AJRIL SAPARA', classId: '3' },
+                            { id: '303', name: 'ALDI ARDIANSYAH', classId: '3' },
+                            { id: '304', name: 'DENI MULYADI', classId: '3' },
+                            { id: '305', name: 'DIAN SEPTIADI', classId: '3' },
+                            { id: '306', name: 'DIKA MULYANA', classId: '3' },
+                            { id: '307', name: 'EGI SENJAYA', classId: '3' },
+                            { id: '308', name: 'GIAN ALIANSYAH', classId: '3' },
+                            { id: '309', name: 'GILANG ILHAM PERMANA', classId: '3' },
+                            { id: '310', name: 'HADI MAULID ATH ATHARIQ', classId: '3' },
+                            { id: '311', name: 'IBAY TOHIRIN', classId: '3' },
+                            { id: '312', name: 'IFAN ANDRIANA', classId: '3' },
+                            { id: '313', name: 'IKMAL RIZAALUL ULUM', classId: '3' },
+                            { id: '314', name: 'KIKI AMELIA', classId: '3' },
+                            { id: '315', name: 'Nayla Maharani', classId: '3' },
+                            { id: '316', name: 'Pirman Permana', classId: '3' },
+                            { id: '317', name: 'REZA RESMANA DIMAJA', classId: '3' },
+                            { id: '318', name: 'SANDI DELAN GUNAWAN', classId: '3' },
+                            { id: '319', name: 'SHOFI ANDIYANI', classId: '3' },
+                            { id: '320', name: 'SYAIRA NAZWA', classId: '3' },
+                            { id: '321', name: 'TIARA SRI RAHAYU', classId: '3' },
+                            { id: '322', name: 'WENDI PERMADI', classId: '3' },
+                            { id: '323', name: 'WINDA DINI YANTI', classId: '3' },
+                            { id: '324', name: 'YOPI', classId: '3' }
+                        ];
+
+                        this.data = {
+                            classes: defaultClasses,
+                            subjects: [],
+                            students: defaultStudents,
+                            attendance: [],
+                            grades: [],
+                        };
+                        this.saveData(); // Simpan data default ke localStorage
+                    } else {
+                        // JIKA DATA SUDAH ADA, LANJUTKAN MEMUAT DATA SEPERTI BIASA
+                        this.data = JSON.parse(storedData);
+                        
+                        if (!this.data.classes) this.data.classes = [];
+                        if (!this.data.subjects) this.data.subjects = [];
+                        if (!this.data.students) this.data.students = [];
+                        if (!this.data.attendance) this.data.attendance = [];
+                        if (!this.data.grades) this.data.grades = [];
+
+                        this.data.classes = this.data.classes.map(item => ({ ...item, id: String(item.id) }));
+                        this.data.subjects = this.data.subjects.map(item => ({ ...item, id: String(item.id) }));
+                        this.data.students = this.data.students.map(item => ({ ...item, id: String(item.id), classId: String(item.classId) }));
+                        this.data.attendance = this.data.attendance.map(item => ({ ...item, studentId: String(item.studentId), classId: String(item.classId), subjectId: String(item.subjectId) }));
+                        this.data.grades = this.data.grades.map(item => ({ ...item, studentId: String(item.studentId), subjectId: String(item.subjectId) }));
+                    }
+                },
+
+                saveData() {
+                    localStorage.setItem('attendanceAppData', JSON.stringify(this.data));
+                    this.renderDashboard();
+                },
+                
+                updateMonthlyReportOption() {
+                    const now = new Date();
+                    const monthName = now.toLocaleString('id-ID', { month: 'long' });
+                    const year = now.getFullYear();
+                    const monthlyOption = document.querySelector('#select-periode-laporan option[value="bulanan"]');
+                    if (monthlyOption) {
+                        monthlyOption.textContent = `Laporan Bulan ${monthName} ${year}`;
+                    }
+                },
+
+                changeView(viewName) {
+                    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                    document.getElementById(`view-${viewName}`).classList.add('active');
+
+                    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                    document.getElementById(`nav-${viewName}`).classList.add('active');
+                    
+                    const titles = {
+                        dashboard: 'Dashboard',
+                        attendance: 'Ambil Absensi',
+                        grades: 'Daftar Nilai',
+                        reports: 'Laporan Kehadiran',
+                        setup: 'Pengaturan'
+                    };
+                    document.getElementById('header-title').textContent = titles[viewName];
+
+                    if (viewName === 'dashboard') this.renderDashboard();
+                    if (['attendance', 'reports', 'setup', 'grades'].includes(viewName)) {
+                        this.renderClassDropdowns();
+                        if(['attendance', 'grades', 'reports'].includes(viewName)) this.renderSubjectDropdowns();
+                        if(viewName === 'reports') this.updateMonthlyReportOption();
+                    }
+                },
+
+                renderDashboard() {
+                    document.getElementById('db-total-kelas').textContent = this.data.classes.length;
+                    document.getElementById('db-total-siswa').textContent = this.data.students.length;
+                    
+                    const today = new Date().toISOString().slice(0, 10);
+                    const todayAttendance = this.data.attendance.filter(a => a.date === today);
+
+                    const summaryContainer = document.getElementById('db-absensi-hari-ini');
+                    if (todayAttendance.length === 0) {
+                        summaryContainer.innerHTML = '<p class="text-center text-gray-500">Belum ada absensi hari ini.</p>';
+                    } else {
+                        const summary = { Hadir: 0, Sakit: 0, Izin: 0, Alfa: 0 };
+                        todayAttendance.forEach(a => {
+                            summary[a.status]++;
+                        });
+                        summaryContainer.innerHTML = `
+                            <div class="grid grid-cols-4 gap-2 text-center">
+                                <div><p class="text-2xl font-bold text-green-600">${summary.Hadir}</p><p class="text-xs font-medium">Hadir</p></div>
+                                <div><p class="text-2xl font-bold text-yellow-600">${summary.Sakit}</p><p class="text-xs font-medium">Sakit</p></div>
+                                <div><p class="text-2xl font-bold text-blue-600">${summary.Izin}</p><p class="text-xs font-medium">Izin</p></div>
+                                <div><p class="text-2xl font-bold text-red-600">${summary.Alfa}</p><p class="text-xs font-medium">Alfa</p></div>
+                            </div>
+                        `;
+                    }
+                    this.renderDashboardChart();
+                },
+
+                renderDashboardChart() {
+                    const chartContainer = document.getElementById('chart-container');
+                    const monthlyData = {};
+                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+
+                    this.data.attendance.forEach(record => {
+                        const date = new Date(record.date);
+                        const monthKey = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+                        if (!monthlyData[monthKey]) {
+                            monthlyData[monthKey] = { Hadir: 0, Sakit: 0, Izin: 0, Alfa: 0, sortKey: date.getFullYear() * 100 + date.getMonth() };
+                        }
+                        monthlyData[monthKey][record.status]++;
+                    });
+
+                    const sortedKeys = Object.keys(monthlyData).sort((a, b) => monthlyData[a].sortKey - monthlyData[b].sortKey);
+                    
+                    if (this.chartInstance) {
+                        this.chartInstance.destroy();
+                        this.chartInstance = null;
+                    }
+
+                    if (sortedKeys.length === 0) {
+                        chartContainer.innerHTML = '<p class="text-center text-gray-500 py-8">Data absensi masih kosong untuk ditampilkan di grafik.</p>';
+                        return;
+                    } 
+                    
+                    chartContainer.innerHTML = '<canvas id="attendanceChart"></canvas>';
+                    const ctx = document.getElementById('attendanceChart').getContext('2d');
+
+                    const labels = sortedKeys;
+                    const datasets = [
+                        { label: 'Hadir', data: labels.map(m => monthlyData[m].Hadir), backgroundColor: 'rgba(34, 197, 94, 0.7)' },
+                        { label: 'Sakit', data: labels.map(m => monthlyData[m].Sakit), backgroundColor: 'rgba(234, 179, 8, 0.7)' },
+                        { label: 'Izin', data: labels.map(m => monthlyData[m].Izin), backgroundColor: 'rgba(59, 130, 246, 0.7)' },
+                        { label: 'Alfa', data: labels.map(m => monthlyData[m].Alfa), backgroundColor: 'rgba(239, 68, 68, 0.7)' }
+                    ];
+
+                    this.chartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: { labels, datasets },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: { stacked: true },
+                                y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                }
+                            }
+                        }
+                    });
+                },
+                
+                downloadCSVTemplate() {
+                    const csvContent = "nama_siswa,nama_kelas\nBudi Santoso,X IPA 1\nCitra Lestari,X IPA 1";
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", "template_impor_siswa.csv");
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                },
+                
+                showGlobalFeedback(message, isError = false) {
+                    const feedbackEl = document.getElementById('global-feedback');
+                    const textEl = document.getElementById('global-feedback-text');
+                    
+                    textEl.textContent = message;
+                    feedbackEl.className = `feedback-toast fixed top-5 right-5 text-white px-4 py-2 rounded-lg shadow-lg z-50 opacity-0 ${isError ? 'bg-red-600' : 'bg-green-600'}`;
+                    
+                    feedbackEl.classList.remove('hidden');
+                    setTimeout(() => feedbackEl.classList.remove('opacity-0'), 10);
+
+                    setTimeout(() => {
+                        feedbackEl.classList.add('opacity-0');
+                        setTimeout(() => feedbackEl.classList.add('hidden'), 300);
+                    }, 4000);
+                },
+
+                importStudentsFromCSV(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    if (!file.name.toLowerCase().endsWith('.csv')) {
+                        this.showGlobalFeedback('File yang dipilih bukan .csv.', true);
+                        event.target.value = '';
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const text = e.target.result;
+                        const delimiter = text.includes(';') ? ';' : ',';
+                        const rows = text.split(/\r?\n/).slice(1);
+                        let addedCount = 0;
+                        let failedCount = 0;
+
+                        rows.forEach(row => {
+                            const trimmedRow = row.trim();
+                            if (!trimmedRow) return;
+
+                            const columns = trimmedRow.split(delimiter);
+                            if (columns.length < 2) return;
+
+                            const studentName = columns[0].trim();
+                            const className = columns[1].trim();
+                            
+                            const classObj = this.data.classes.find(c => c.name.toLowerCase() === className.toLowerCase());
+                            
+                            if (studentName && classObj) {
+                                 const studentExists = this.data.students.some(s => 
+                                    s.name.toLowerCase() === studentName.toLowerCase() && s.classId === classObj.id
+                                );
+                                if (!studentExists) {
+                                    const newStudent = { id: String(Date.now() + Math.random()), name: studentName, classId: classObj.id };
+                                    this.data.students.push(newStudent);
+                                    addedCount++;
+                                } else {
+                                    failedCount++;
+                                }
+                            } else {
+                                failedCount++;
+                            }
+                        });
+                        
+                        this.saveData();
+                        this.renderStudentList();
+                        
+                        let feedbackMessage = `${addedCount} siswa berhasil diimpor.`;
+                        let isError = false;
+                        if (failedCount > 0) {
+                            feedbackMessage += ` ${failedCount} gagal/dilewati.`;
+                            isError = addedCount === 0;
+                        }
+                        this.showGlobalFeedback(feedbackMessage, isError);
+
+                        event.target.value = '';
+                    };
+                    reader.readAsText(file);
+                },
+
+                renderAll() {
+                    this.renderClassList();
+                    this.renderSubjectList();
+                    this.renderClassDropdowns();
+                    this.renderStudentList();
+                    this.renderDashboard();
+                },
+                renderClassList() {
+                    const list = document.getElementById('list-kelas');
+                    list.innerHTML = '';
+                    this.data.classes.forEach(c => {
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center bg-gray-100 p-2 rounded-md';
+                        li.innerHTML = `<span>${c.name}</span><button onclick="app.showDeleteConfirmation('class', '${c.id}')" class="text-red-500 hover:text-red-700">Hapus</button>`;
+                        list.appendChild(li);
+                    });
+                },
+                renderSubjectList() {
+                    const list = document.getElementById('list-mapel');
+                    list.innerHTML = '';
+                    this.data.subjects.forEach(s => {
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center bg-gray-100 p-2 rounded-md';
+                        li.innerHTML = `<span>${s.name}</span><button onclick="app.showDeleteConfirmation('subject', '${s.id}')" class="text-red-500 hover:text-red-700">Hapus</button>`;
+                        list.appendChild(li);
+                    });
+                },
+                renderStudentList() {
+                    const classId = document.getElementById('select-kelas-siswa').value;
+                    const list = document.getElementById('list-siswa');
+                    list.innerHTML = '';
+                    if (!classId) return;
+
+                    const studentsInClass = this.data.students.filter(s => s.classId === classId);
+                    studentsInClass.forEach(s => {
+                        const li = document.createElement('li');
+                        li.className = 'flex justify-between items-center bg-gray-100 p-2 rounded-md';
+                        li.innerHTML = `<span>${s.name}</span><button onclick="app.showDeleteConfirmation('student', '${s.id}')" class="text-red-500 hover:text-red-700">Hapus</button>`;
+                        list.appendChild(li);
+                    });
+                },
+                renderClassDropdowns() {
+                    const selects = [
+                        document.getElementById('select-kelas-siswa'),
+                        document.getElementById('select-kelas-absen'),
+                        document.getElementById('select-kelas-laporan-absensi'),
+                        document.getElementById('select-kelas-laporan-nilai'),
+                        document.getElementById('select-kelas-nilai')
+                    ];
+                    selects.forEach(select => {
+                        if(!select) return;
+                        const currentValue = select.value;
+                        select.innerHTML = `<option value="">Pilih Kelas</option>`;
+                        this.data.classes.forEach(c => {
+                            const option = document.createElement('option');
+                            option.value = c.id;
+                            option.textContent = c.name;
+                            select.appendChild(option);
+                        });
+                        select.value = currentValue;
+                    });
+                },
+                renderSubjectDropdowns() {
+                    const selects = [
+                        document.getElementById('select-mapel-absen'),
+                        document.getElementById('select-mapel-nilai'),
+                        document.getElementById('select-mapel-laporan-nilai')
+                    ];
+                    selects.forEach(select => {
+                        if(!select) return;
+                        const currentValue = select.value;
+                        select.innerHTML = `<option value="">Pilih Mata Pelajaran</option>`;
+                        this.data.subjects.forEach(s => {
+                            const option = document.createElement('option');
+                            option.value = s.id;
+                            option.textContent = s.name;
+                            select.appendChild(option);
+                        });
+                        select.value = currentValue;
+                    });
+                },
+                addClass() {
+                    const input = document.getElementById('input-kelas');
+                    if (!input.value.trim()) return;
+                    const newClass = { id: String(Date.now()), name: input.value.trim() };
+                    this.data.classes.push(newClass);
+                    input.value = '';
+                    this.saveData();
+                    this.renderClassList();
+                    this.renderClassDropdowns();
+                },
+                addSubject() {
+                    const input = document.getElementById('input-mapel');
+                    if (!input.value.trim()) return;
+                    const newSubject = { id: String(Date.now()), name: input.value.trim() };
+                    this.data.subjects.push(newSubject);
+                    input.value = '';
+                    this.saveData();
+                    this.renderSubjectList();
+                    this.renderSubjectDropdowns();
+                },
+                addStudent() {
+                    const classId = document.getElementById('select-kelas-siswa').value;
+                    const input = document.getElementById('input-siswa');
+                    if (!classId || !input.value.trim()) {
+                        this.showGlobalFeedback('Pilih kelas dan masukkan nama siswa terlebih dahulu.', true);
+                        return;
+                    }
+                    const newStudent = { id: String(Date.now()), name: input.value.trim(), classId: classId };
+                    this.data.students.push(newStudent);
+                    input.value = '';
+                    this.saveData();
+                    this.renderStudentList();
+                },
+
+                showDeleteConfirmation(type, id) {
+                    this.itemToDelete = { type, id: String(id) };
+                    const modal = document.getElementById('delete-modal');
+                    modal.classList.remove('hidden');
+                    setTimeout(() => modal.classList.remove('opacity-0'), 10);
+                },
+                cancelDeletion() {
+                    const modal = document.getElementById('delete-modal');
+                    modal.classList.add('opacity-0');
+                    setTimeout(() => modal.classList.add('hidden'), 200);
+                    this.itemToDelete = { type: null, id: null };
+                },
+                confirmDeletion() {
+                    const { type, id } = this.itemToDelete;
+                    if (!type || !id) return;
+
+                    if (type === 'class') {
+                        this.data.classes = this.data.classes.filter(c => c.id !== id);
+                        const studentsToDelete = this.data.students.filter(s => s.classId === id).map(s => s.id);
+                        this.data.students = this.data.students.filter(s => s.classId !== id);
+                        this.data.attendance = this.data.attendance.filter(a => !studentsToDelete.includes(a.studentId));
+                        this.data.grades = this.data.grades.filter(g => !studentsToDelete.includes(g.studentId));
+                    } else if (type === 'subject') {
+                        this.data.subjects = this.data.subjects.filter(s => s.id !== id);
+                        this.data.attendance = this.data.attendance.filter(a => a.subjectId !== id);
+                        this.data.grades = this.data.grades.filter(g => g.subjectId !== id);
+                    } else if (type === 'student') {
+                        this.data.students = this.data.students.filter(s => s.id !== id);
+                        this.data.attendance = this.data.attendance.filter(a => a.studentId !== id);
+                        this.data.grades = this.data.grades.filter(g => g.studentId !== id);
+                    }
+
+                    this.saveData();
+                    this.renderAll();
+                    this.cancelDeletion();
+                },
+
+                startAttendance() {
+                    const classId = document.getElementById('select-kelas-absen').value;
+                    const subjectId = document.getElementById('select-mapel-absen').value;
+                    if (!classId || !subjectId) {
+                        this.showMessage('Pilih kelas dan mata pelajaran terlebih dahulu.', 'bg-yellow-200', 'text-yellow-800');
+                        return;
+                    }
+                    const className = this.data.classes.find(c => c.id === classId).name;
+                    const subjectName = this.data.subjects.find(s => s.id === subjectId).name;
+                    const today = new Date().toISOString().slice(0, 10);
+                    const existingAttendance = this.data.attendance.find(a => 
+                        a.classId === classId && a.subjectId === subjectId && a.date === today
+                    );
+                    if (existingAttendance) {
+                        this.showMessage(`Absensi untuk ${className} - ${subjectName} hari ini sudah diambil.`, 'bg-blue-200', 'text-blue-800');
+                        document.getElementById('attendance-sheet').classList.add('hidden');
+                        return;
+                    }
+                    this.showMessage('', 'hidden');
+                    document.getElementById('attendance-header').textContent = `Absensi: ${className} - ${subjectName}`;
+                    const students = this.data.students.filter(s => s.classId === classId);
+                    const list = document.getElementById('list-absen');
+                    list.innerHTML = '';
+                    this.currentAttendance = [];
+                    students.forEach(student => {
+                        const record = { studentId: student.id, status: 'Hadir' };
+                        this.currentAttendance.push(record);
+                        const item = document.createElement('div');
+                        item.className = 'flex justify-between items-center bg-gray-50 p-2 rounded-md';
+                        item.innerHTML = `
+                            <span class="font-medium">${student.name}</span>
+                            <div class="flex gap-1" data-student-id="${student.id}">
+                                <button onclick="app.setAttendanceStatus(this, 'Hadir')" class="status-btn selected bg-green-500 text-white w-8 h-8 rounded-full font-bold">H</button>
+                                <button onclick="app.setAttendanceStatus(this, 'Sakit')" class="status-btn bg-yellow-500 text-white w-8 h-8 rounded-full font-bold">S</button>
+                                <button onclick="app.setAttendanceStatus(this, 'Izin')" class="status-btn bg-blue-500 text-white w-8 h-8 rounded-full font-bold">I</button>
+                                <button onclick="app.setAttendanceStatus(this, 'Alfa')" class="status-btn bg-red-500 text-white w-8 h-8 rounded-full font-bold">A</button>
+                            </div>
+                        `;
+                        list.appendChild(item);
+                    });
+                    document.getElementById('attendance-sheet').classList.remove('hidden');
+                },
+                setAttendanceStatus(button, status) {
+                    const studentId = button.parentElement.dataset.studentId;
+                    const record = this.currentAttendance.find(r => r.studentId === studentId);
+                    record.status = status;
+                    const buttons = button.parentElement.querySelectorAll('.status-btn');
+                    buttons.forEach(b => b.classList.remove('selected', 'ring-2', 'ring-offset-2', 'ring-indigo-500'));
+                    button.classList.add('selected', 'ring-2', 'ring-offset-2', 'ring-indigo-500');
+                },
+                saveAttendance() {
+                    const classId = document.getElementById('select-kelas-absen').value;
+                    const subjectId = document.getElementById('select-mapel-absen').value;
+                    const today = new Date().toISOString().slice(0, 10);
+                    this.currentAttendance.forEach(record => {
+                        this.data.attendance.push({
+                            ...record,
+                            date: today,
+                            classId: classId,
+                            subjectId: subjectId
+                        });
+                    });
+                    this.saveData();
+                    this.showMessage('Absensi berhasil disimpan!', 'bg-green-200', 'text-green-800');
+                    document.getElementById('attendance-sheet').classList.add('hidden');
+                    document.getElementById('select-kelas-absen').value = '';
+                    document.getElementById('select-mapel-absen').value = '';
+                },
+                showMessage(text, bgClass, textClass) {
+                    const box = document.getElementById('message-box');
+                    box.textContent = text;
+                    box.className = `p-4 rounded-md text-center font-medium ${bgClass} ${textClass}`;
+                    box.classList.toggle('hidden', text === '');
+                },
+                
+                showGradeSheet() {
+                    const classId = document.getElementById('select-kelas-nilai').value;
+                    const subjectId = document.getElementById('select-mapel-nilai').value;
+                    const gradeType = document.getElementById('select-jenis-nilai').value;
+
+                    if (!classId || !subjectId || !gradeType) {
+                        this.showGlobalFeedback('Pilih kelas, mapel, dan jenis penilaian.', true);
+                        return;
+                    }
+
+                    const className = this.data.classes.find(c => c.id === classId).name;
+                    const subjectName = this.data.subjects.find(s => s.id === subjectId).name;
+                    document.getElementById('grade-header').textContent = `Nilai ${gradeType}: ${className} - ${subjectName}`;
+
+                    const students = this.data.students.filter(s => s.classId === classId);
+                    const list = document.getElementById('list-nilai');
+                    list.innerHTML = '';
+
+                    students.forEach(student => {
+                        const existingGrade = this.data.grades.find(g => 
+                            g.studentId === student.id &&
+                            g.subjectId === subjectId &&
+                            g.gradeType === gradeType
+                        );
+                        const score = existingGrade ? existingGrade.score : '';
+
+                        const item = document.createElement('div');
+                        item.className = 'flex justify-between items-center bg-gray-50 p-2 rounded-md';
+                        item.innerHTML = `
+                            <span class="font-medium w-3/5">${student.name}</span>
+                            <input type="number" min="0" max="100" placeholder="0-100" value="${score}" data-student-id="${student.id}" class="w-2/5 px-3 py-1 border border-gray-300 rounded-md text-center focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        `;
+                        list.appendChild(item);
+                    });
+                    document.getElementById('grade-sheet').classList.remove('hidden');
+                },
+
+                saveGrades() {
+                    const subjectId = document.getElementById('select-mapel-nilai').value;
+                    const gradeType = document.getElementById('select-jenis-nilai').value;
+
+                    const inputs = document.querySelectorAll('#list-nilai input');
+                    let savedCount = 0;
+
+                    inputs.forEach(input => {
+                        const studentId = input.dataset.studentId;
+                        const score = input.value;
+
+                        if (score === '' || isNaN(score)) return;
+
+                        const existingGradeIndex = this.data.grades.findIndex(g => 
+                            g.studentId === studentId &&
+                            g.subjectId === subjectId &&
+                            g.gradeType === gradeType
+                        );
+
+                        if (existingGradeIndex > -1) {
+                            this.data.grades[existingGradeIndex].score = parseInt(score);
+                        } else {
+                            this.data.grades.push({
+                                studentId,
+                                subjectId,
+                                gradeType,
+                                score: parseInt(score)
+                            });
+                        }
+                        savedCount++;
+                    });
+
+                    this.saveData();
+                    this.showGlobalFeedback(`${savedCount} nilai berhasil disimpan.`);
+                    document.getElementById('grade-sheet').classList.add('hidden');
+                    document.getElementById('select-kelas-nilai').value = '';
+                    document.getElementById('select-mapel-nilai').value = '';
+                    document.getElementById('select-jenis-nilai').value = '';
+                },
+
+                toggleReportOptions() {
+                    const reportType = document.getElementById('select-jenis-laporan').value;
+                    const absensiOptions = document.getElementById('laporan-absensi-options');
+                    const nilaiOptions = document.getElementById('laporan-nilai-options');
+                    
+                    if (reportType === 'absensi') {
+                        absensiOptions.classList.remove('hidden');
+                        nilaiOptions.classList.add('hidden');
+                    } else {
+                        absensiOptions.classList.add('hidden');
+                        nilaiOptions.classList.remove('hidden');
+                    }
+                    document.getElementById('report-output').classList.add('hidden');
+                },
+
+                generateReport() {
+                    const reportType = document.getElementById('select-jenis-laporan').value;
+                    if (reportType === 'absensi') {
+                        this.generateAttendanceReport();
+                    } else {
+                        this.generateGradeReport();
+                    }
+                },
+
+                generateAttendanceReport() {
+                    const classId = document.getElementById('select-kelas-laporan-absensi').value;
+                    const periode = document.getElementById('select-periode-laporan').value;
+                    if (!classId) {
+                        this.showGlobalFeedback('Pilih kelas terlebih dahulu.', true);
+                        return;
+                    }
+                    const { startDate, endDate } = this.getDateRangeForPeriod(periode);
+                    const students = this.data.students.filter(s => s.classId === classId);
+                    const attendanceData = this.data.attendance.filter(a => {
+                        const attendanceDate = new Date(a.date);
+                        return a.classId === classId && attendanceDate >= startDate && attendanceDate <= endDate;
+                    });
+                    this.currentReportData = [];
+                    const report = students.map(student => {
+                        const studentAttendance = attendanceData.filter(a => a.studentId === student.id);
+                        const summary = {
+                            Hadir: studentAttendance.filter(a => a.status === 'Hadir').length,
+                            Sakit: studentAttendance.filter(a => a.status === 'Sakit').length,
+                            Izin: studentAttendance.filter(a => a.status === 'Izin').length,
+                            Alfa: studentAttendance.filter(a => a.status === 'Alfa').length,
+                        };
+                        const reportRow = { name: student.name, ...summary };
+                        this.currentReportData.push(reportRow);
+                        return reportRow;
+                    });
+                    this.renderAttendanceReportTable(report);
+                },
+
+                generateGradeReport() {
+                    const classId = document.getElementById('select-kelas-laporan-nilai').value;
+                    const subjectId = document.getElementById('select-mapel-laporan-nilai').value;
+                    if (!classId || !subjectId) {
+                        this.showGlobalFeedback('Pilih kelas dan mata pelajaran.', true);
+                        return;
+                    }
+                    const students = this.data.students.filter(s => s.classId === classId);
+                    const gradeTypes = ["Ulangan Harian 1", "Ulangan Harian 2", "Ulangan Harian 3", "Ulangan Harian 4", "Ulangan Harian 5", "PTS", "PAS"];
+                    this.currentReportData = [];
+
+                    const report = students.map(student => {
+                        let studentGrades = { name: student.name };
+                        gradeTypes.forEach(type => {
+                            const grade = this.data.grades.find(g => 
+                                g.studentId === student.id &&
+                                g.subjectId === subjectId &&
+                                g.gradeType === type
+                            );
+                            studentGrades[type] = grade ? grade.score : '-';
+                        });
+                        this.currentReportData.push(studentGrades);
+                        return studentGrades;
+                    });
+                    this.renderGradeReportTable(report, gradeTypes);
+                },
+
+                getDateRangeForPeriod(periode) {
+                    const now = new Date();
+                    let startDate, endDate;
+                    switch(periode) {
+                        case 'bulanan': startDate = new Date(now.getFullYear(), now.getMonth(), 1); endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0); break;
+                        case 'semester1': startDate = new Date(now.getFullYear(), 6, 1); endDate = new Date(now.getFullYear(), 11, 31); break;
+                        case 'semester2': startDate = new Date(now.getFullYear(), 0, 1); endDate = new Date(now.getFullYear(), 5, 30); break;
+                        case 'tahunan': startDate = new Date(now.getFullYear(), 0, 1); endDate = new Date(now.getFullYear(), 11, 31); break;
+                    }
+                    return { startDate, endDate };
+                },
+
+                renderAttendanceReportTable(reportData) {
+                    const container = document.getElementById('report-table-container');
+                    container.innerHTML = `
+                        <table class="min-w-full text-sm text-left">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="p-2">Nama Siswa</th>
+                                    <th class="p-2 text-center">H</th>
+                                    <th class="p-2 text-center">S</th>
+                                    <th class="p-2 text-center">I</th>
+                                    <th class="p-2 text-center">A</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-table-body-absensi"></tbody>
+                        </table>
+                    `;
+                    const tableBody = document.getElementById('report-table-body-absensi');
+                    if (reportData.length === 0) {
+                        tableBody.innerHTML = '<tr><td colspan="5" class="text-center p-4">Tidak ada data untuk periode ini.</td></tr>';
+                    } else {
+                        reportData.forEach(row => {
+                            const tr = document.createElement('tr');
+                            tr.className = 'border-b';
+                            tr.innerHTML = `
+                                <td class="p-2 font-medium">${row.name}</td>
+                                <td class="p-2 text-center">${row.Hadir}</td>
+                                <td class="p-2 text-center">${row.Sakit}</td>
+                                <td class="p-2 text-center">${row.Izin}</td>
+                                <td class="p-2 text-center">${row.Alfa}</td>
+                            `;
+                            tableBody.appendChild(tr);
+                        });
+                    }
+                    const classElement = document.getElementById('select-kelas-laporan-absensi');
+                    const className = classElement.options[classElement.selectedIndex].text;
+                    document.getElementById('report-header').textContent = `Laporan Absensi Kelas ${className}`;
+                    document.getElementById('report-output').classList.remove('hidden');
+                },
+
+                renderGradeReportTable(reportData, gradeTypes) {
+                    const container = document.getElementById('report-table-container');
+                    const headerHtml = gradeTypes.map(type => `<th class="p-2 text-center">${type.replace('Ulangan Harian ', 'UH')}</th>`).join('');
+                    container.innerHTML = `
+                        <table class="min-w-full text-sm text-left">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="p-2">Nama Siswa</th>
+                                    ${headerHtml}
+                                </tr>
+                            </thead>
+                            <tbody id="report-table-body-nilai"></tbody>
+                        </table>
+                    `;
+                    const tableBody = document.getElementById('report-table-body-nilai');
+                    if (reportData.length === 0) {
+                        tableBody.innerHTML = `<tr><td colspan="${gradeTypes.length + 1}" class="text-center p-4">Tidak ada data untuk ditampilkan.</td></tr>`;
+                    } else {
+                        reportData.forEach(row => {
+                            const rowHtml = gradeTypes.map(type => `<td class="p-2 text-center">${row[type]}</td>`).join('');
+                            const tr = document.createElement('tr');
+                            tr.className = 'border-b';
+                            tr.innerHTML = `<td class="p-2 font-medium">${row.name}</td>${rowHtml}`;
+                            tableBody.appendChild(tr);
+                        });
+                    }
+                    const classElement = document.getElementById('select-kelas-laporan-nilai');
+                    const subjectElement = document.getElementById('select-mapel-laporan-nilai');
+                    const className = classElement.options[classElement.selectedIndex].text;
+                    const subjectName = subjectElement.options[subjectElement.selectedIndex].text;
+                    document.getElementById('report-header').textContent = `Laporan Nilai: ${className} - ${subjectName}`;
+                    document.getElementById('report-output').classList.remove('hidden');
+                },
+                
+                async exportReportToPDF() {
+                    if (this.currentReportData.length === 0) {
+                        this.showGlobalFeedback("Tidak ada data untuk diekspor.", true);
+                        return;
+                    }
+                    
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF();
+                    
+                    const reportType = document.getElementById('select-jenis-laporan').value;
+                    let className, subjectName, periodeName;
+
+                    if (reportType === 'absensi') {
+                        const classElement = document.getElementById('select-kelas-laporan-absensi');
+                        const periodeElement = document.getElementById('select-periode-laporan');
+                        className = classElement.options[classElement.selectedIndex].text;
+                        periodeName = periodeElement.options[periodeElement.selectedIndex].text;
+                        doc.text("Laporan Kehadiran Siswa", 14, 22);
+                        doc.text(`Kelas: ${className}`, 14, 30);
+                        doc.text(`Periode: ${periodeName}`, 14, 36);
+                        doc.autoTable({ html: '#report-table-container table', startY: 40 });
+                    } else {
+                        const classElement = document.getElementById('select-kelas-laporan-nilai');
+                        const subjectElement = document.getElementById('select-mapel-laporan-nilai');
+                        className = classElement.options[classElement.selectedIndex].text;
+                        subjectName = subjectElement.options[subjectElement.selectedIndex].text;
+                        doc.text("Laporan Nilai Siswa", 14, 22);
+                        doc.text(`Kelas: ${className}`, 14, 30);
+                        doc.text(`Mata Pelajaran: ${subjectName}`, 14, 36);
+                        doc.autoTable({ html: '#report-table-container table', startY: 40 });
+                    }
+
+                    const fileName = `Laporan_${reportType}_${className.replace(' ', '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
+
+                    if (window.Android && typeof window.Android.savePdf === 'function') {
+                        try {
+                            const base64Data = doc.output('datauristring').split(',')[1];
+                            window.Android.savePdf(base64Data, fileName);
+                        } catch (e) {
+                             console.error('Gagal menyimpan via Android Interface', e);
+                             this.showGlobalFeedback('Gagal menyimpan PDF di perangkat.', true);
+                        }
+                    } else {
+                        doc.save(fileName);
+                    }
+                }
+            };
+            
+            window.app = app;
+            app.init();
+        });
+    </script>
+</body>
+</html>
